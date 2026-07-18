@@ -13,7 +13,11 @@ import { STATUS_OPTIONS } from "@/lib/constants";
 export const dynamic = "force-dynamic";
 
 function buildReturnTo(params) {
-  const query = params.toString();
+  const nextParams = new URLSearchParams(params);
+  nextParams.delete("auth");
+  nextParams.delete("statusError");
+  nextParams.delete("typeError");
+  const query = nextParams.toString();
   return query ? `/admin?${query}` : "/admin";
 }
 

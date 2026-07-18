@@ -64,7 +64,9 @@ export default async function Home({ searchParams }) {
           </label>
 
           <label>
-<input name="photos" type="file" accept="image/jpeg,image/png,image/gif,image/webp,image/avif" multiple />
+            <span>Photos (optional)</span>
+            <input name="photos" type="file" accept="image/jpeg,image/png,image/gif,image/webp,image/avif" multiple />
+            <small>Upload up to {MAX_PHOTOS} photos in JPG, PNG, GIF, WebP, or AVIF format.</small>
           </label>
 
           <label>
