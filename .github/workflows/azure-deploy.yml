@@ -12,16 +12,17 @@ env:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    # Build inside the same base image Azure App Service uses at runtime
-    # (NODE|20-lts). Native modules like better-sqlite3 must be compiled
-    # against the target's glibc — building on ubuntu-latest directly
-    # produced a binary that crashed at runtime (GLIBC_2.38 not found).
-    # Building here also keeps Azure's F1 free-tier CPU quota from being
-    # spent on the build itself (Oryx running npm install/next build on
-    # the App Service container exhausted the whole daily quota).
-    # mcr.microsoft.com/v2/appsvc/node/tags/list has no floating "20-lts"
-    # tag, only dated ones — bump this periodically to pick up patches.
-    container: mcr.microsoft.com/appsvc/node:20-lts_20260710.8.tuxprod
+    # Native modules like better-sqlite3 must be compiled against a glibc
+    # no newer than Azure's runtime — building on ubuntu-latest (glibc
+    # 2.39) produced a binary that crashed at runtime (GLIBC_2.38 not
+    # found). Azure's actual runtime image (mcr.microsoft.com/appsvc/node)
+    # is a minimal image with no build toolchain (no `make`), so we can't
+    # build inside it directly. Debian 11 (glibc 2.31, comfortably older)
+    # with Node's official build tools included is a safe, well-known
+    # substitute. Building here also keeps Azure's F1 free-tier CPU quota
+    # from being spent on the build itself (Oryx running npm install/next
+    # build on the App Service container exhausted the whole daily quota).
+    container: node:20-bullseye
     steps:
       - uses: actions/checkout@v4
 
