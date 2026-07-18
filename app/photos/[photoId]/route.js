@@ -16,11 +16,16 @@ export async function GET(_request, { params }) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  const safeName = String(photo.file_name || "photo")
+    .replace(/[\r\n"]/g, "")
+    .replace(/[\\/]/g, "_");
+
   return new NextResponse(photo.data, {
     headers: {
       "Content-Type": photo.content_type,
-      "Content-Disposition": `inline; filename="${photo.file_name.replace(/"/g, "")}"`,
+      "Content-Disposition": `inline; filename="${safeName}"; filename*=UTF-8''${encodeURIComponent(safeName)}`,
       "Cache-Control": "private, max-age=0, must-revalidate",
+      "X-Content-Type-Options": "nosniff",
     },
   });
 }
