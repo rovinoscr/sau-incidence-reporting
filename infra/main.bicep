@@ -11,7 +11,7 @@ param location string = resourceGroup().location
 ])
 param skuName string = 'F1'
 
-@description('Bcrypt hash of the password required to sign in to /admin. Generate with: node -e "const b=require(\'bcryptjs\');console.log(b.hashSync(\'<password>\',12))"')
+@description('Bcrypt hash of the password required to sign in to /admin. Generate the hash first, then pass it here.')
 @secure()
 param adminPassword string
 
@@ -67,7 +67,7 @@ resource webApp 'Microsoft.Web/sites@2023-12-01' = {
           value: '/home/data/sau-incidence-reporting.db'
         }
         {
-          name: 'ADMIN_PASSWORD'
+          name: 'ADMIN_PASSWORD_HASH'
           value: adminPassword
         }
         {
