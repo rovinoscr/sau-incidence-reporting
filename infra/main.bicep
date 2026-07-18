@@ -11,7 +11,7 @@ param location string = resourceGroup().location
 ])
 param skuName string = 'F1'
 
-@description('Password required to sign in to /admin.')
+@description('Bcrypt hash of the password required to sign in to /admin. Generate with: node -e "const b=require(\'bcryptjs\');console.log(b.hashSync(\'<password>\',12))"')
 @secure()
 param adminPassword string
 
