@@ -66,3 +66,4 @@ Important caveats:
 - The database is created automatically on first run.
 - Default incidence types are seeded automatically and can be managed from the admin page.
 - Uploaded photos are stored inside the SQLite database.
+- The built-in workflow statuses include `reported_to_naret` and `reported_to_zen` because the original requirements explicitly asked for those named escalation targets.
