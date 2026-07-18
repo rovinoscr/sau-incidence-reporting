@@ -55,18 +55,18 @@ Prerequisites: `az` and `gh` CLIs installed (`brew install azure-cli gh`), logge
                   emailEncryptionSecret="$(openssl rand -hex 32)"
    ```
 
-   App names are globally unique across Azure, so pick a suffix (e.g. your community name + a few digits).
+   App names are globally unique across Azure, so pick a suffix (e.g. your community name + a few digits). If a region reports `SubscriptionIsOverQuotaForSku` for the free tier, retry with `--parameters location=<other-region>` (e.g. `centralus`) — free-tier compute quota varies by region and subscription type.
 
 2. Get the publish profile and wire up GitHub Actions:
 
    ```bash
-   az webapp deploy-list-publish-profiles --name <appName> --resource-group sau-incidence-rg --xml \
+   az webapp deployment list-publishing-profiles --name <appName> --resource-group sau-incidence-rg --xml \
      | gh secret set AZURE_WEBAPP_PUBLISH_PROFILE
 
    gh variable set AZURE_WEBAPP_NAME --body "<appName>"
    ```
 
-3. Push to `main` (or run the workflow manually from the Actions tab). The [`azure-deploy.yml`](.github/workflows/azure-deploy.yml) workflow builds the app on GitHub's Linux runners (matching Azure's Linux runtime, so the native `better-sqlite3` binary is compiled for the right platform) and deploys it.
+3. Push to `main` (or run the workflow manually from the Actions tab). The [`azure-deploy.yml`](.github/workflows/azure-deploy.yml) workflow installs and builds once just to verify there are no errors, then deploys the raw source (not the CI-built `node_modules`/`.next`). Azure's Oryx build (`SCM_DO_BUILD_DURING_DEPLOYMENT=true`) does the real `npm install` + `next build` on the App Service container itself — this matters because the native `better-sqlite3` binary must be built against Azure's own glibc version, which doesn't match GitHub's `ubuntu-latest` runner.
 
 4. Visit `https://<appName>.azurewebsites.net`.
 
