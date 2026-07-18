@@ -46,8 +46,8 @@ Important caveats:
 2. Set these values:
 
    - `ADMIN_PASSWORD`: required to access `/admin`
-   - `ADMIN_SESSION_SECRET`: used to sign the admin session cookie
-   - `EMAIL_ENCRYPTION_SECRET`: used to encrypt optional email values
+   - `ADMIN_SESSION_SECRET`: used to sign the admin session cookie, required in production
+   - `EMAIL_ENCRYPTION_SECRET`: used to encrypt optional email values, required in production
    - `DATABASE_PATH`: optional absolute path for the SQLite database file
 
 3. Install dependencies and start the app:

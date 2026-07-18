@@ -8,6 +8,8 @@ import { MAX_PHOTOS, MAX_PHOTO_SIZE_BYTES, STATUS_OPTIONS } from "@/lib/constant
 import { encryptEmail } from "@/lib/crypto";
 
 const allowedStatuses = new Set(STATUS_OPTIONS.map((status) => status.value));
+const emailPattern =
+  /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
 
 function cleanRedirectTarget(target) {
   if (!target || typeof target !== "string" || !target.startsWith("/admin")) {
@@ -26,6 +28,15 @@ function withQueryMessage(pathname, key, value) {
   return nextQuery ? `${basePath}?${nextQuery}` : basePath;
 }
 
+function isValidIsoDate(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false;
+  }
+
+  const parsedDate = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(parsedDate.valueOf()) && parsedDate.toISOString().slice(0, 10) === value;
+}
+
 function parseReportInput(formData) {
   const incidenceDate = String(formData.get("incidenceDate") || "").trim();
   const typeId = Number(formData.get("typeId"));
@@ -34,7 +45,7 @@ function parseReportInput(formData) {
   const email = String(formData.get("email") || "").trim();
   const files = formData.getAll("photos").filter((entry) => entry && typeof entry === "object" && "size" in entry);
 
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(incidenceDate)) {
+  if (!isValidIsoDate(incidenceDate)) {
     throw new Error("Please choose a valid incidence date.");
   }
 
@@ -50,7 +61,7 @@ function parseReportInput(formData) {
     throw new Error("Please provide a description up to 2000 characters.");
   }
 
-  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  if (email && !emailPattern.test(email)) {
     throw new Error("Please provide a valid email address.");
   }
 
