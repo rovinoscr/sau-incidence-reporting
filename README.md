@@ -18,6 +18,7 @@ A small full-stack Next.js application for collecting and managing public incide
   - type management for the public dropdown
 - Lightweight SQLite storage
 - Optional email values encrypted at rest and never displayed in the admin UI
+- Localized in Spanish (default) and English, with a language toggle on every page
 
 ## Stack
 
@@ -96,6 +97,14 @@ To change the admin password or secrets later: `az webapp config appsettings set
 4. Open:
    - Public form: `http://localhost:3000/`
    - Admin dashboard: `http://localhost:3000/admin`
+
+## Localization
+
+The app defaults to Spanish for every visitor, regardless of browser language — this does **not** auto-detect the browser's `Accept-Language` header, since the community is Spanish-speaking by default. English is available via the "EN" toggle at `/en` (e.g. `/en/admin`), which switches by adding a URL prefix, not a cookie-only preference.
+
+- UI strings live in [`messages/es.json`](messages/es.json) and [`messages/en.json`](messages/en.json). Add a key to both files when adding new UI text.
+- Admin-controlled content (incidence type names, e.g. "Tubería rota") is free-text data stored in the database, not a translated UI string — it displays the same regardless of the selected language. Rename or duplicate types per language from the admin page if bilingual type names are needed.
+- Status labels (New, Fixed, etc.) are translated; the underlying stored values (`new`, `fixed`, ...) are not.
 
 ## Notes
 
