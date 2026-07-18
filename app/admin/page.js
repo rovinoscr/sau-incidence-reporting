@@ -21,7 +21,7 @@ function Message({ children, kind = "error" }) {
   return <p className={`${styles.banner} ${kind === "error" ? styles.error : styles.success}`}>{children}</p>;
 }
 
-function LoginPanel({ params }) {
+function LoginPanel({ params, returnTo }) {
   return (
     <section className={styles.card}>
       <div className={styles.sectionHeader}>
@@ -33,7 +33,7 @@ function LoginPanel({ params }) {
       {params.auth === "failed" ? <Message>Invalid admin password.</Message> : null}
       {params.auth === "required" ? <Message>Please sign in to continue.</Message> : null}
       <form action={loginAction} className={styles.form}>
-        <input type="hidden" name="returnTo" value="/admin" />
+        <input type="hidden" name="returnTo" value={returnTo} />
         <label>
           <span>Admin password</span>
           <input name="password" type="password" required />
@@ -65,7 +65,7 @@ export default async function AdminPage({ searchParams }) {
   if (!(await isAuthenticated())) {
     return (
       <main className={styles.page}>
-        <LoginPanel params={Object.fromEntries(params.entries())} />
+        <LoginPanel params={Object.fromEntries(params.entries())} returnTo={buildReturnTo(params)} />
       </main>
     );
   }
