@@ -19,7 +19,9 @@ jobs:
     # Building here also keeps Azure's F1 free-tier CPU quota from being
     # spent on the build itself (Oryx running npm install/next build on
     # the App Service container exhausted the whole daily quota).
-    container: mcr.microsoft.com/appservice/node:20-lts
+    # mcr.microsoft.com/v2/appsvc/node/tags/list has no floating "20-lts"
+    # tag, only dated ones — bump this periodically to pick up patches.
+    container: mcr.microsoft.com/appsvc/node:20-lts_20260710.8.tuxprod
     steps:
       - uses: actions/checkout@v4
 
