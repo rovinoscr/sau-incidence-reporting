@@ -27,13 +27,49 @@ A small full-stack Next.js application for collecting and managing public incide
 
 ## Cheapest Azure SKU recommendation
 
-For the lowest-cost first deployment, start with **Azure App Service Free (F1)** and keep the app on a **single instance** with the default local SQLite database path.
+For the lowest-cost first deployment, use **Azure App Service Free (F1)** on a **single instance**. The Bicep template in [`infra/main.bicep`](infra/main.bicep) provisions this by default.
 
 Important caveats:
 
-- F1 is the cheapest entry point, but it has limited CPU, memory, and uptime behavior.
-- If you need stronger reliability, custom domains with fewer limitations, or better performance for photo uploads, the next practical step is **Basic B1**.
-- This app stores SQLite data in a local file, so it should stay on a single instance unless storage is moved to a managed service.
+- F1 has a ~60 CPU-minute/day quota; once exceeded, the app stops responding until the quota resets. It also has no Always On, no custom domain SSL, and a shared 1 GB storage cap for the whole app (code + SQLite DB + photos).
+- If the community relies on this being reliably up, move to **Basic B1** (~$13/month) by passing `skuName=B1` to the Bicep deployment — no code changes needed.
+- **Critical:** the SQLite file must live outside the app's deployment folder (`/home/site/wwwroot`), because every redeploy replaces that folder's contents. The template sets `DATABASE_PATH=/home/data/sau-incidence-reporting.db`, which is under Azure's persistent `/home` share and survives redeploys and restarts.
+- This app stores SQLite data in a local file, so it must stay on a single instance (no scale-out) unless storage is moved to a managed service (e.g. Azure Files mount, Azure SQL, or Blob Storage for photos).
+
+## Deploying to Azure
+
+Prerequisites: `az` and `gh` CLIs installed (`brew install azure-cli gh`), logged in with `az login` and `gh auth login`, and a GitHub remote for this repo.
+
+1. Create a resource group and deploy the infrastructure:
+
+   ```bash
+   az group create --name sau-incidence-rg --location eastus
+
+   az deployment group create \
+     --resource-group sau-incidence-rg \
+     --template-file infra/main.bicep \
+     --parameters appName=sau-incidence-<your-unique-suffix> \
+                  adminPassword='<choose-a-strong-password>' \
+                  adminSessionSecret="$(openssl rand -hex 32)" \
+                  emailEncryptionSecret="$(openssl rand -hex 32)"
+   ```
+
+   App names are globally unique across Azure, so pick a suffix (e.g. your community name + a few digits).
+
+2. Get the publish profile and wire up GitHub Actions:
+
+   ```bash
+   az webapp deploy-list-publish-profiles --name <appName> --resource-group sau-incidence-rg --xml \
+     | gh secret set AZURE_WEBAPP_PUBLISH_PROFILE
+
+   gh variable set AZURE_WEBAPP_NAME --body "<appName>"
+   ```
+
+3. Push to `main` (or run the workflow manually from the Actions tab). The [`azure-deploy.yml`](.github/workflows/azure-deploy.yml) workflow builds the app on GitHub's Linux runners (matching Azure's Linux runtime, so the native `better-sqlite3` binary is compiled for the right platform) and deploys it.
+
+4. Visit `https://<appName>.azurewebsites.net`.
+
+To change the admin password or secrets later: `az webapp config appsettings set --name <appName> --resource-group sau-incidence-rg --settings ADMIN_PASSWORD='<new-value>'`.
 
 ## Local setup
 
