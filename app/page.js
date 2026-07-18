@@ -64,9 +64,7 @@ export default async function Home({ searchParams }) {
           </label>
 
           <label>
-            <span>Photos (up to {MAX_PHOTOS})</span>
-            <input name="photos" type="file" accept="image/*" multiple />
-            <small>Image files only, up to 5 MB each.</small>
+<input name="photos" type="file" accept="image/jpeg,image/png,image/gif,image/webp,image/avif" multiple />
           </label>
 
           <label>
