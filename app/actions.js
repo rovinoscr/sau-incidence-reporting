@@ -85,9 +85,9 @@ async function normalizePhotos(uploadedFiles) {
   const photos = [];
 
   for (const file of uploadedFiles) {
-    if (!file.type.startsWith("image/")) {
-      throw new Error("Only image uploads are allowed.");
-    }
+if (!["image/jpeg", "image/png", "image/gif", "image/webp", "image/avif"].includes(String(file.type || "").toLowerCase())) {
+  throw new Error("Only PNG, JPEG, GIF, WebP, or AVIF image uploads are allowed.");
+}
 
     if (file.size > MAX_PHOTO_SIZE_BYTES) {
       throw new Error("Each photo must be 5 MB or smaller.");
