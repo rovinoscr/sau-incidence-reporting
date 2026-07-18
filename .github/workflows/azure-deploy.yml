@@ -12,6 +12,8 @@ env:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     # Native modules like better-sqlite3 must be compiled against a glibc
     # no newer than Azure's runtime — building on ubuntu-latest (glibc
     # 2.39) produced a binary that crashed at runtime (GLIBC_2.38 not

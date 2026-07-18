@@ -46,11 +46,14 @@ Prerequisites: `az` and `gh` CLIs installed (`brew install azure-cli gh`), logge
    ```bash
    az group create --name sau-incidence-rg --location eastus
 
+   # Generate the bcrypt hash of your chosen admin password first:
+   ADMIN_HASH=$(node -e "const b=require('bcryptjs');console.log(b.hashSync('<choose-a-strong-password>',12))")
+
    az deployment group create \
      --resource-group sau-incidence-rg \
      --template-file infra/main.bicep \
      --parameters appName=sau-incidence-<your-unique-suffix> \
-                  adminPassword='<choose-a-strong-password>' \
+                  adminPassword="$ADMIN_HASH" \
                   adminSessionSecret="$(openssl rand -hex 32)" \
                   emailEncryptionSecret="$(openssl rand -hex 32)"
    ```
@@ -72,7 +75,7 @@ Prerequisites: `az` and `gh` CLIs installed (`brew install azure-cli gh`), logge
 
 4. Visit `https://<appName>.azurewebsites.net`.
 
-To change the admin password or secrets later: `az webapp config appsettings set --name <appName> --resource-group sau-incidence-rg --settings ADMIN_PASSWORD='<new-value>'`.
+To change the admin password or secrets later: `az webapp config appsettings set --name <appName> --resource-group sau-incidence-rg --settings ADMIN_PASSWORD_HASH='<bcrypt-hash-of-new-password>'`.
 
 ## Local setup
 
@@ -84,7 +87,10 @@ To change the admin password or secrets later: `az webapp config appsettings set
 
 2. Set these values:
 
-   - `ADMIN_PASSWORD`: required to access `/admin`
+   - `ADMIN_PASSWORD_HASH`: required to access `/admin`. Must be a bcrypt hash of your chosen password. Generate with:
+     ```bash
+     node -e "const b=require('bcryptjs');console.log(b.hashSync('<your-password>',12))"
+     ```
    - `ADMIN_SESSION_SECRET`: used to sign the admin session cookie, required in production
    - `EMAIL_ENCRYPTION_SECRET`: used to encrypt optional email values, required in production
    - `DATABASE_PATH`: optional absolute path for the SQLite database file
