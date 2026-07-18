@@ -4,15 +4,28 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createType, createReport, findActiveTypeById, toggleType, updateReportStatus } from "@/lib/db";
 import { login, logout, requireAdmin } from "@/lib/admin-session";
-import { MAX_PHOTOS, MAX_PHOTO_SIZE_BYTES, STATUS_OPTIONS } from "@/lib/constants";
+import {
+  MAX_PHOTOS,
+  MAX_PHOTO_SIZE_BYTES,
+  MAX_REPORTER_LENGTH,
+  MAX_DESCRIPTION_LENGTH,
+  MAX_TYPE_NAME_LENGTH,
+  STATUS_VALUES,
+} from "@/lib/constants";
 import { encryptEmail } from "@/lib/crypto";
+import { withLocale, stripLocalePrefix } from "@/lib/locale-path";
 
-const allowedStatuses = new Set(STATUS_OPTIONS.map((status) => status.value));
+const allowedStatuses = new Set(STATUS_VALUES);
 const emailPattern =
   /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
 
+function getFormLocale(formData) {
+  const locale = String(formData.get("locale") || "");
+  return locale === "en" ? "en" : "es";
+}
+
 function cleanRedirectTarget(target) {
-  if (!target || typeof target !== "string" || !target.startsWith("/admin")) {
+  if (!target || typeof target !== "string" || !stripLocalePrefix(target).startsWith("/admin")) {
     return "/admin";
   }
 
@@ -37,6 +50,13 @@ function isValidIsoDate(value) {
   return !Number.isNaN(parsedDate.valueOf()) && parsedDate.toISOString().slice(0, 10) === value;
 }
 
+class ReportValidationError extends Error {
+  constructor(code) {
+    super(code);
+    this.code = code;
+  }
+}
+
 function parseReportInput(formData) {
   const incidenceDate = String(formData.get("incidenceDate") || "").trim();
   const typeId = Number(formData.get("typeId"));
@@ -46,29 +66,29 @@ function parseReportInput(formData) {
   const files = formData.getAll("photos").filter((entry) => entry && typeof entry === "object" && "size" in entry);
 
   if (!isValidIsoDate(incidenceDate)) {
-    throw new Error("Please choose a valid incidence date.");
+    throw new ReportValidationError("invalidDate");
   }
 
   if (!Number.isInteger(typeId) || !findActiveTypeById(typeId)) {
-    throw new Error("Please choose a valid incidence type.");
+    throw new ReportValidationError("invalidType");
   }
 
-  if (!reporterHouseNumber || reporterHouseNumber.length > 40) {
-    throw new Error("Please provide a house number up to 40 characters.");
+  if (!reporterHouseNumber || reporterHouseNumber.length > MAX_REPORTER_LENGTH) {
+    throw new ReportValidationError("invalidReporter");
   }
 
-  if (!description || description.length > 2000) {
-    throw new Error("Please provide a description up to 2000 characters.");
+  if (!description || description.length > MAX_DESCRIPTION_LENGTH) {
+    throw new ReportValidationError("invalidDescription");
   }
 
   if (email && !emailPattern.test(email)) {
-    throw new Error("Please provide a valid email address.");
+    throw new ReportValidationError("invalidEmail");
   }
 
   const uploadedFiles = files.filter((file) => file.size > 0);
 
   if (uploadedFiles.length > MAX_PHOTOS) {
-    throw new Error(`You can upload up to ${MAX_PHOTOS} photos.`);
+    throw new ReportValidationError("tooManyPhotos");
   }
 
   return {
@@ -85,12 +105,12 @@ async function normalizePhotos(uploadedFiles) {
   const photos = [];
 
   for (const file of uploadedFiles) {
-if (!["image/jpeg", "image/png", "image/gif", "image/webp", "image/avif"].includes(String(file.type || "").toLowerCase())) {
-  throw new Error("Only PNG, JPEG, GIF, WebP, or AVIF image uploads are allowed.");
-}
+    if (!["image/jpeg", "image/png", "image/gif", "image/webp", "image/avif"].includes(String(file.type || "").toLowerCase())) {
+      throw new ReportValidationError("invalidPhotoType");
+    }
 
     if (file.size > MAX_PHOTO_SIZE_BYTES) {
-      throw new Error("Each photo must be 5 MB or smaller.");
+      throw new ReportValidationError("photoTooLarge");
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
@@ -105,6 +125,8 @@ if (!["image/jpeg", "image/png", "image/gif", "image/webp", "image/avif"].includ
 }
 
 export async function submitReportAction(formData) {
+  const locale = getFormLocale(formData);
+
   try {
     const input = parseReportInput(formData);
     const photos = await normalizePhotos(input.uploadedFiles);
@@ -118,17 +140,18 @@ export async function submitReportAction(formData) {
       photos,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to submit the report.";
-    redirect(`/?error=${encodeURIComponent(message)}`);
+    const code = error instanceof ReportValidationError ? error.code : "generic";
+    redirect(withLocale(locale, `/?error=${encodeURIComponent(code)}`));
   }
 
-  revalidatePath("/");
-  revalidatePath("/admin");
-  redirect("/?submitted=1");
+  revalidatePath("/", "layout");
+  revalidatePath("/admin", "layout");
+  redirect(withLocale(locale, "/?submitted=1"));
 }
 
 export async function loginAction(formData) {
-  const returnTo = cleanRedirectTarget(String(formData.get("returnTo") || "/admin"));
+  const locale = getFormLocale(formData);
+  const returnTo = cleanRedirectTarget(String(formData.get("returnTo") || withLocale(locale, "/admin")));
   const password = String(formData.get("password") || "");
 
   if (!(await login(password))) {
@@ -138,42 +161,45 @@ export async function loginAction(formData) {
   redirect(returnTo);
 }
 
-export async function logoutAction() {
+export async function logoutAction(formData) {
+  const locale = getFormLocale(formData);
   await logout();
-  redirect("/admin");
+  redirect(withLocale(locale, "/admin"));
 }
 
 export async function createTypeAction(formData) {
   await requireAdmin();
 
-  const returnTo = cleanRedirectTarget(String(formData.get("returnTo") || "/admin"));
+  const locale = getFormLocale(formData);
+  const returnTo = cleanRedirectTarget(String(formData.get("returnTo") || withLocale(locale, "/admin")));
   const name = String(formData.get("name") || "").trim();
 
-  if (!name || name.length > 80) {
-    redirect(withQueryMessage(returnTo, "typeError", "Please provide a type name up to 80 characters."));
+  if (!name || name.length > MAX_TYPE_NAME_LENGTH) {
+    redirect(withQueryMessage(returnTo, "typeError", "nameRequired"));
   }
 
   try {
     createType(name);
   } catch {
-    redirect(withQueryMessage(returnTo, "typeError", "That incidence type already exists."));
+    redirect(withQueryMessage(returnTo, "typeError", "nameExists"));
   }
 
-  revalidatePath("/");
-  revalidatePath("/admin");
+  revalidatePath("/", "layout");
+  revalidatePath("/admin", "layout");
   redirect(returnTo);
 }
 
 export async function toggleTypeAction(formData) {
   await requireAdmin();
 
-  const returnTo = cleanRedirectTarget(String(formData.get("returnTo") || "/admin"));
+  const locale = getFormLocale(formData);
+  const returnTo = cleanRedirectTarget(String(formData.get("returnTo") || withLocale(locale, "/admin")));
   const typeId = Number(formData.get("typeId"));
 
   if (Number.isInteger(typeId)) {
     toggleType(typeId);
-    revalidatePath("/");
-    revalidatePath("/admin");
+    revalidatePath("/", "layout");
+    revalidatePath("/admin", "layout");
   }
 
   redirect(returnTo);
@@ -182,15 +208,16 @@ export async function toggleTypeAction(formData) {
 export async function updateReportStatusAction(formData) {
   await requireAdmin();
 
-  const returnTo = cleanRedirectTarget(String(formData.get("returnTo") || "/admin"));
+  const locale = getFormLocale(formData);
+  const returnTo = cleanRedirectTarget(String(formData.get("returnTo") || withLocale(locale, "/admin")));
   const reportId = Number(formData.get("reportId"));
   const status = String(formData.get("status") || "");
 
   if (!Number.isInteger(reportId) || !allowedStatuses.has(status)) {
-    redirect(withQueryMessage(returnTo, "statusError", "Please choose a valid status."));
+    redirect(withQueryMessage(returnTo, "statusError", "invalidStatus"));
   }
 
   updateReportStatus(reportId, status);
-  revalidatePath("/admin");
+  revalidatePath("/admin", "layout");
   redirect(returnTo);
 }

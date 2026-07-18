@@ -1,3 +1,4 @@
+import { getTranslations, setRequestLocale } from "next-intl/server";
 import styles from "@/app/page.module.css";
 import {
   createTypeAction,
@@ -8,59 +9,66 @@ import {
 } from "@/app/actions";
 import { hasConfiguredAdminPassword, isAuthenticated } from "@/lib/admin-session";
 import { listReports, listTypes } from "@/lib/db";
-import { STATUS_OPTIONS } from "@/lib/constants";
+import { MAX_TYPE_NAME_LENGTH, STATUS_VALUES } from "@/lib/constants";
+import { withLocale } from "@/lib/locale-path";
+import LanguageSwitcher from "@/app/language-switcher";
 
 export const dynamic = "force-dynamic";
 
-function buildReturnTo(params) {
+function buildReturnTo(locale, params) {
   const nextParams = new URLSearchParams(params);
   nextParams.delete("auth");
   nextParams.delete("statusError");
   nextParams.delete("typeError");
   const query = nextParams.toString();
-  return query ? `/admin?${query}` : "/admin";
+  return withLocale(locale, query ? `/admin?${query}` : "/admin");
 }
 
 function Message({ children, kind = "error" }) {
   return <p className={`${styles.banner} ${kind === "error" ? styles.error : styles.success}`}>{children}</p>;
 }
 
-function LoginPanel({ params, returnTo }) {
+function LoginPanel({ t, params, returnTo, locale }) {
   return (
     <section className={styles.card}>
       <div className={styles.sectionHeader}>
         <div>
-          <h1>Admin dashboard</h1>
-          <p className={styles.helperText}>Sign in with the admin password to review and update incidence reports.</p>
+          <h1>{t("loginTitle")}</h1>
+          <p className={styles.helperText}>{t("loginHelp")}</p>
         </div>
+        <LanguageSwitcher />
       </div>
-      {params.auth === "failed" ? <Message>Invalid admin password.</Message> : null}
-      {params.auth === "required" ? <Message>Please sign in to continue.</Message> : null}
+      {params.auth === "failed" ? <Message>{t("authFailed")}</Message> : null}
+      {params.auth === "required" ? <Message>{t("authRequired")}</Message> : null}
       <form action={loginAction} className={styles.form}>
+        <input type="hidden" name="locale" value={locale} />
         <input type="hidden" name="returnTo" value={returnTo} />
         <label>
-          <span>Admin password</span>
+          <span>{t("passwordLabel")}</span>
           <input name="password" type="password" required />
         </label>
         <button className={styles.primaryButton} type="submit">
-          Sign in
+          {t("signIn")}
         </button>
       </form>
     </section>
   );
 }
 
-export default async function AdminPage({ searchParams }) {
+export default async function AdminPage({ params: paramsPromise, searchParams }) {
+  const { locale } = await paramsPromise;
+  setRequestLocale(locale);
+
+  const t = await getTranslations("Admin");
+  const tStatus = await getTranslations("Status");
   const params = new URLSearchParams(await searchParams);
 
   if (!hasConfiguredAdminPassword()) {
     return (
       <main className={styles.page}>
         <section className={styles.card}>
-          <h1>Admin setup required</h1>
-          <p className={styles.helperText}>
-            Set <code>ADMIN_PASSWORD</code> in your environment before using the admin dashboard.
-          </p>
+          <h1>{t("setupRequiredTitle")}</h1>
+          <p className={styles.helperText}>{t("setupRequiredBody")}</p>
         </section>
       </main>
     );
@@ -69,7 +77,12 @@ export default async function AdminPage({ searchParams }) {
   if (!(await isAuthenticated())) {
     return (
       <main className={styles.page}>
-        <LoginPanel params={Object.fromEntries(params.entries())} returnTo={buildReturnTo(params)} />
+        <LoginPanel
+          t={t}
+          params={Object.fromEntries(params.entries())}
+          returnTo={buildReturnTo(locale, params)}
+          locale={locale}
+        />
       </main>
     );
   }
@@ -78,7 +91,7 @@ export default async function AdminPage({ searchParams }) {
   const incidenceDate = params.get("incidenceDate") || "";
   const reporter = params.get("reporter") || "";
   const status = params.get("status") || "";
-  const returnTo = buildReturnTo(params);
+  const returnTo = buildReturnTo(locale, params);
 
   const types = listTypes();
   const reports = listReports({
@@ -88,32 +101,38 @@ export default async function AdminPage({ searchParams }) {
     status,
   });
 
+  const typeErrorKey = params.get("typeError");
+  const statusErrorKey = params.get("statusError");
+
   return (
     <main className={styles.page}>
       <section className={styles.card}>
         <div className={styles.sectionHeader}>
           <div>
-            <span className={styles.eyebrow}>Admin</span>
-            <h1>Incidence dashboard</h1>
-            <p className={styles.helperText}>
-              Filter reports, update statuses, and manage the public incidence type dropdown.
-            </p>
+            <span className={styles.eyebrow}>{t("eyebrow")}</span>
+            <h1>{t("dashboardTitle")}</h1>
+            <p className={styles.helperText}>{t("dashboardHelp")}</p>
           </div>
-          <form action={logoutAction}>
-            <button className={styles.secondaryButton} type="submit">
-              Sign out
-            </button>
-          </form>
+          <div className={styles.heroActions}>
+            <LanguageSwitcher />
+            <form action={logoutAction}>
+              <input type="hidden" name="locale" value={locale} />
+              <button className={styles.secondaryButton} type="submit">
+                {t("signOut")}
+              </button>
+            </form>
+          </div>
         </div>
 
-        {params.get("typeError") ? <Message>{params.get("typeError")}</Message> : null}
-        {params.get("statusError") ? <Message>{params.get("statusError")}</Message> : null}
+        {typeErrorKey === "nameRequired" ? <Message>{t("typeErrorNameRequired", { max: MAX_TYPE_NAME_LENGTH })}</Message> : null}
+        {typeErrorKey === "nameExists" ? <Message>{t("typeErrorNameExists")}</Message> : null}
+        {statusErrorKey ? <Message>{t("statusErrorInvalid")}</Message> : null}
 
         <form className={styles.filterGrid}>
           <label>
-            <span>Type</span>
+            <span>{t("filterTypeLabel")}</span>
             <select name="typeId" defaultValue={typeFilter}>
-              <option value="">All types</option>
+              <option value="">{t("allTypes")}</option>
               {types.map((type) => (
                 <option key={type.id} value={type.id}>
                   {type.name}
@@ -122,26 +141,26 @@ export default async function AdminPage({ searchParams }) {
             </select>
           </label>
           <label>
-            <span>Date</span>
+            <span>{t("filterDateLabel")}</span>
             <input name="incidenceDate" type="date" defaultValue={incidenceDate} />
           </label>
           <label>
-            <span>Reporter</span>
-            <input name="reporter" type="text" defaultValue={reporter} placeholder="House number" />
+            <span>{t("filterReporterLabel")}</span>
+            <input name="reporter" type="text" defaultValue={reporter} placeholder={t("reporterPlaceholder")} />
           </label>
           <label>
-            <span>Status</span>
+            <span>{t("filterStatusLabel")}</span>
             <select name="status" defaultValue={status}>
-              <option value="">All statuses</option>
-              {STATUS_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
+              <option value="">{t("allStatuses")}</option>
+              {STATUS_VALUES.map((value) => (
+                <option key={value} value={value}>
+                  {tStatus(value)}
                 </option>
               ))}
             </select>
           </label>
           <button className={styles.primaryButton} type="submit">
-            Apply filters
+            {t("applyFilters")}
           </button>
         </form>
       </section>
@@ -149,19 +168,20 @@ export default async function AdminPage({ searchParams }) {
       <section className={styles.card}>
         <div className={styles.sectionHeader}>
           <div>
-            <h2>Incidence types</h2>
-            <p className={styles.helperText}>Admins control the options available in the public dropdown.</p>
+            <h2>{t("typesTitle")}</h2>
+            <p className={styles.helperText}>{t("typesHelp")}</p>
           </div>
         </div>
 
         <form action={createTypeAction} className={styles.inlineForm}>
+          <input type="hidden" name="locale" value={locale} />
           <input type="hidden" name="returnTo" value={returnTo} />
           <label>
-            <span>New incidence type</span>
-            <input name="name" type="text" maxLength={80} placeholder="Add a new type" required />
+            <span>{t("newTypeLabel")}</span>
+            <input name="name" type="text" maxLength={MAX_TYPE_NAME_LENGTH} placeholder={t("newTypePlaceholder")} required />
           </label>
           <button className={styles.primaryButton} type="submit">
-            Add type
+            {t("addType")}
           </button>
         </form>
 
@@ -171,15 +191,16 @@ export default async function AdminPage({ searchParams }) {
               <div className={styles.sectionHeader}>
                 <strong>{type.name}</strong>
                 <form action={toggleTypeAction}>
+                  <input type="hidden" name="locale" value={locale} />
                   <input type="hidden" name="typeId" value={type.id} />
                   <input type="hidden" name="returnTo" value={returnTo} />
                   <button className={styles.inlineButton} type="submit">
-                    {type.is_active ? "Deactivate" : "Reactivate"}
+                    {type.is_active ? t("deactivate") : t("reactivate")}
                   </button>
                 </form>
               </div>
               <div className={styles.badgeRow}>
-                <span className={styles.badge}>{type.is_active ? "Active in form" : "Hidden from form"}</span>
+                <span className={styles.badge}>{type.is_active ? t("activeInForm") : t("hiddenFromForm")}</span>
               </div>
             </div>
           ))}
@@ -189,13 +210,13 @@ export default async function AdminPage({ searchParams }) {
       <section className={styles.card}>
         <div className={styles.sectionHeader}>
           <div>
-            <h2>Submitted incidences</h2>
-            <p className={styles.helperText}>{reports.length} report(s) match the current filters.</p>
+            <h2>{t("reportsTitle")}</h2>
+            <p className={styles.helperText}>{t("reportsCount", { count: reports.length })}</p>
           </div>
         </div>
 
         {reports.length === 0 ? (
-          <div className={styles.emptyState}>No incidences match the current filters.</div>
+          <div className={styles.emptyState}>{t("noReportsMatch")}</div>
         ) : (
           <div className={styles.list}>
             {reports.map((report) => (
@@ -206,45 +227,48 @@ export default async function AdminPage({ searchParams }) {
                       {report.type_name} · {report.reporter_house_number}
                     </h3>
                     <div className={styles.metaRow}>
-                      <span className={styles.badge}>Date: {report.incidence_date}</span>
-                      <span className={styles.badge}>Submitted: {new Date(report.created_at).toLocaleString()}</span>
-                      <span className={styles.badge}>{report.has_email ? "Encrypted email on file" : "No email provided"}</span>
+                      <span className={styles.badge}>
+                        {t("dateLabel")}: {report.incidence_date}
+                      </span>
+                      <span className={styles.badge}>
+                        {t("submittedLabel")}: {new Date(report.created_at).toLocaleString(locale)}
+                      </span>
+                      <span className={styles.badge}>{report.has_email ? t("hasEmail") : t("noEmail")}</span>
                     </div>
                   </div>
-                  <span className={styles.statusBadge}>
-                    {STATUS_OPTIONS.find((option) => option.value === report.status)?.label || report.status}
-                  </span>
+                  <span className={styles.statusBadge}>{tStatus(report.status)}</span>
                 </div>
 
                 <p className={styles.reportText}>{report.description}</p>
 
                 <div className={styles.photoRow}>
                   {report.photos.length === 0 ? (
-                    <span className={styles.helperText}>No photos attached.</span>
+                    <span className={styles.helperText}>{t("noPhotos")}</span>
                   ) : (
                     report.photos.map((photo, index) => (
                       <a className={styles.photoLink} href={`/photos/${photo.id}`} key={photo.id} target="_blank" rel="noreferrer">
-                        Photo {index + 1}
+                        {t("photoLabel", { index: index + 1 })}
                       </a>
                     ))
                   )}
                 </div>
 
                 <form action={updateReportStatusAction} className={styles.inlineForm}>
+                  <input type="hidden" name="locale" value={locale} />
                   <input type="hidden" name="reportId" value={report.id} />
                   <input type="hidden" name="returnTo" value={returnTo} />
                   <label>
-                    <span>Status</span>
+                    <span>{t("statusLabel")}</span>
                     <select name="status" defaultValue={report.status}>
-                      {STATUS_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
+                      {STATUS_VALUES.map((value) => (
+                        <option key={value} value={value}>
+                          {tStatus(value)}
                         </option>
                       ))}
                     </select>
                   </label>
                   <button className={styles.primaryButton} type="submit">
-                    Save status
+                    {t("saveStatus")}
                   </button>
                 </form>
               </article>
