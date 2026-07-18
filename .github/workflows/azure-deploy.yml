@@ -12,6 +12,8 @@ env:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     # Build inside the same base image Azure App Service uses at runtime
     # (NODE|20-lts). Native modules like better-sqlite3 must be compiled
     # against the target's glibc — building on ubuntu-latest directly
