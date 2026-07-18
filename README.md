@@ -32,7 +32,7 @@ For the lowest-cost first deployment, use **Azure App Service Free (F1)** on a *
 
 Important caveats:
 
-- F1 has a ~60 CPU-minute/day quota; once exceeded, the app stops responding until the quota resets. It also has no Always On, no custom domain SSL, and a shared 1 GB storage cap for the whole app (code + SQLite DB + photos).
+- F1 has a ~60 CPU-minute/day quota; once exceeded, the app is disabled (`state: QuotaExceeded`, HTTP 403) until the quota resets, roughly daily. **This is tight enough that a single Azure-side build can exhaust it** — see the CI note below on why the build must not run on Azure itself. It also has no Always On, no custom domain SSL, and a shared 1 GB storage cap for the whole app (code + SQLite DB + photos).
 - If the community relies on this being reliably up, move to **Basic B1** (~$13/month) by passing `skuName=B1` to the Bicep deployment — no code changes needed.
 - **Critical:** the SQLite file must live outside the app's deployment folder (`/home/site/wwwroot`), because every redeploy replaces that folder's contents. The template sets `DATABASE_PATH=/home/data/sau-incidence-reporting.db`, which is under Azure's persistent `/home` share and survives redeploys and restarts.
 - This app stores SQLite data in a local file, so it must stay on a single instance (no scale-out) unless storage is moved to a managed service (e.g. Azure Files mount, Azure SQL, or Blob Storage for photos).
@@ -66,7 +66,9 @@ Prerequisites: `az` and `gh` CLIs installed (`brew install azure-cli gh`), logge
    gh variable set AZURE_WEBAPP_NAME --body "<appName>"
    ```
 
-3. Push to `main` (or run the workflow manually from the Actions tab). The [`azure-deploy.yml`](.github/workflows/azure-deploy.yml) workflow installs and builds once just to verify there are no errors, then deploys the raw source (not the CI-built `node_modules`/`.next`). Azure's Oryx build (`SCM_DO_BUILD_DURING_DEPLOYMENT=true`) does the real `npm install` + `next build` on the App Service container itself — this matters because the native `better-sqlite3` binary must be built against Azure's own glibc version, which doesn't match GitHub's `ubuntu-latest` runner.
+3. Push to `main` (or run the workflow manually from the Actions tab). The [`azure-deploy.yml`](.github/workflows/azure-deploy.yml) workflow builds and deploys the compiled `node_modules`/`.next` directly — it does **not** let Azure build (`SCM_DO_BUILD_DURING_DEPLOYMENT=false`). Two things make where the build runs matter:
+   - The native `better-sqlite3` binary must be compiled against the same glibc as the runtime. Building on GitHub's default `ubuntu-latest` runner produced a binary that crashed at runtime (`GLIBC_2.38 not found`), so the workflow builds inside the `mcr.microsoft.com/appservice/node:20-lts` container instead — the same base image Azure itself runs.
+   - Letting Azure build via Oryx (`SCM_DO_BUILD_DURING_DEPLOYMENT=true`) runs `npm install`/`next build` on the App Service container's own compute, which on F1 can exhaust the entire daily CPU quota from a single build and disable the site. Keep the build off Azure entirely on F1.
 
 4. Visit `https://<appName>.azurewebsites.net`.
 
